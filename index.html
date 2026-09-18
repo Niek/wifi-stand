@@ -1,0 +1,1043 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WiFi QR Stand</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css">
+<style>
+  html { background: #14161a; }
+  body { color: #e8eaed; }
+  .title, .label, .subtitle { color: #e8eaed !important; }
+  .input, .select select, .textarea {
+    background: #1e2128; border-color: #343a45; color: #e8eaed;
+  }
+  .input:focus, .select select:focus { border-color: #6c8cff; box-shadow: 0 0 0 .125em rgba(108,140,255,.25); }
+  .input::placeholder { color: #6b7280; }
+  .panel-card { background: #1a1d23; border: 1px solid #272b33; border-radius: 12px; }
+  #stage {
+    position: relative; width: 100%; height: 72vh; min-height: 420px;
+    border-radius: 12px; overflow: hidden; border: 1px solid #272b33;
+    background: radial-gradient(120% 90% at 50% 0%, #2b303a 0%, #15171c 70%);
+    cursor: grab;
+  }
+  #stage:active { cursor: grabbing; }
+  #stage canvas { display: block; }
+  #overlay {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    font-size: .9rem; color: #9aa3b2; background: rgba(20,22,26,.6); pointer-events: none;
+  }
+  #overlay.is-hidden-fade { opacity: 0; transition: opacity .4s; }
+  .meta { font-size: .78rem; color: #8b93a3; line-height: 1.6; }
+  .meta b { color: #c9d1de; font-weight: 600; }
+  .scale-row { display: flex; align-items: center; gap: .6rem; }
+  .scale-row input[type=range] { flex: 1; accent-color: #6c8cff; background: transparent; }
+  .scale-row input[type=number] { width: 4.8rem; text-align: right; }
+  .scale-row .pct { color: #8b93a3; font-size: .85rem; }
+  .legend { display: flex; gap: 1rem; font-size: .75rem; color: #8b93a3; }
+  .swatch { display: inline-block; width: .7rem; height: .7rem; border-radius: 3px; margin-right: .35rem; vertical-align: -1px; border: 1px solid #3a3f4a; }
+</style>
+</head>
+<body>
+<section class="section pt-5 pb-5">
+  <div class="container">
+
+    <h1 class="title is-3 mb-1">WiFi QR Stand</h1>
+    <p class="subtitle is-6 has-text-grey mb-5">
+      Type your network details, spin the model around, then download a print-ready 3MF.
+    </p>
+
+    <div class="columns is-variable is-5">
+      <!-- ---------------- controls ---------------- -->
+      <div class="column is-4">
+        <div class="panel-card p-5">
+          <div class="field">
+            <label class="label is-small">Network name (SSID)</label>
+            <div class="control">
+              <input id="ssid" class="input" type="text" value="Guest Network" placeholder="MyWiFi" maxlength="32" autocomplete="off">
+            </div>
+          </div>
+
+          <div class="field">
+            <label class="label is-small">Password</label>
+            <div class="control">
+              <input id="pass" class="input" type="text" value="letmein123" placeholder="Password" maxlength="63" autocomplete="off">
+            </div>
+          </div>
+
+          <div class="field">
+            <label class="label is-small">Security</label>
+            <div class="control">
+              <div class="select is-fullwidth">
+                <select id="auth">
+                  <option value="WPA">WPA / WPA2 / WPA3</option>
+                  <option value="WEP">WEP</option>
+                  <option value="nopass">Open (no password)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div class="columns is-mobile is-variable is-2">
+            <div class="column">
+              <div class="field mb-2">
+                <label class="label is-small">Title</label>
+                <div class="control">
+                  <input id="title" class="input" type="text" value="GUEST WIFI" maxlength="18" autocomplete="off">
+                </div>
+              </div>
+            </div>
+            <div class="column">
+              <div class="field mb-2">
+                <label class="label is-small">Subtitle</label>
+                <div class="control">
+                  <input id="subtitle" class="input" type="text" value="SCAN TO CONNECT" maxlength="24" autocomplete="off">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="field">
+            <label class="label is-small">Scale</label>
+            <div class="control scale-row">
+              <input id="scale" type="range" min="25" max="300" step="1" value="100">
+              <input id="scaleNum" class="input is-small" type="number" min="10" max="500" step="1" value="100">
+              <span class="pct">%</span>
+            </div>
+          </div>
+
+          <hr style="background:#272b33;margin:1.25rem 0">
+
+          <button id="download" class="button is-primary is-fullwidth mb-3">
+            <span>Download 3MF</span>
+          </button>
+
+          <p id="meta" class="meta"></p>
+
+          <div class="legend mt-4">
+            <span><i class="swatch" style="background:#2a2d33"></i>black &mdash; filament 1</span>
+            <span><i class="swatch" style="background:#f2f2ee"></i>white &mdash; filament 2</span>
+          </div>
+          <p class="meta mt-2">Exports as two parts in one object. Prints upright, no supports.</p>
+        </div>
+      </div>
+
+      <!-- ---------------- viewer ---------------- -->
+      <div class="column is-8">
+        <div id="stage">
+          <div id="overlay">loading…</div>
+        </div>
+        <p class="meta mt-3">
+          Drag to orbit · scroll to zoom · right-drag to pan
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.183.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.183.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { FontLoader } from 'three/addons/loaders/FontLoader.js';
+import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+/* ------------------------------------------------------------------ *
+ * Minimal QR Code encoder — byte mode, error-correction level M.
+ * Returns a square boolean matrix (true = dark module), no quiet zone.
+ * ------------------------------------------------------------------ */
+const QR = (() => {
+  // Per version (1-40) at ECC level M: EC codewords per block, and block count.
+  const ECC_CW  = [-1,10,16,26,18,24,16,18,22,22,26,30,22,22,24,24,28,28,26,26,26,26,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28];
+  const ECC_BLK = [-1, 1, 1, 1, 2, 2, 4, 4, 4, 5, 5, 5, 8, 9, 9,10,10,11,13,14,16,17,17,18,20,21,23,25,26,28,29,31,33,35,37,38,40,43,45,47,49];
+
+  const bit = (x, i) => ((x >>> i) & 1) !== 0;
+
+  // Total module count available for data + EC, before function patterns.
+  function rawModules(ver) {
+    let r = (16 * ver + 128) * ver + 64;
+    if (ver >= 2) {
+      const n = Math.floor(ver / 7) + 2;
+      r -= (25 * n - 10) * n - 55;
+      if (ver >= 7) r -= 36;
+    }
+    return r;
+  }
+  const rawCodewords  = ver => Math.floor(rawModules(ver) / 8);
+  const dataCodewords = ver => rawCodewords(ver) - ECC_CW[ver] * ECC_BLK[ver];
+
+  // --- GF(256) arithmetic, primitive polynomial x^8+x^4+x^3+x^2+1 -----
+  function gfMul(x, y) {
+    let z = 0;
+    for (let i = 7; i >= 0; i--) {
+      z = (z << 1) ^ ((z >>> 7) * 0x11d);
+      z ^= ((y >>> i) & 1) * x;
+    }
+    return z & 0xff;
+  }
+  function rsDivisor(degree) {
+    const d = new Uint8Array(degree);
+    d[degree - 1] = 1;
+    let root = 1;
+    for (let i = 0; i < degree; i++) {
+      for (let j = 0; j < degree; j++) {
+        d[j] = gfMul(d[j], root);
+        if (j + 1 < degree) d[j] ^= d[j + 1];
+      }
+      root = gfMul(root, 2);
+    }
+    return d;
+  }
+  function rsRemainder(data, divisor) {
+    const res = new Uint8Array(divisor.length);
+    for (const b of data) {
+      const factor = b ^ res[0];
+      res.copyWithin(0, 1);
+      res[res.length - 1] = 0;
+      for (let i = 0; i < divisor.length; i++) res[i] ^= gfMul(divisor[i], factor);
+    }
+    return res;
+  }
+
+  // --- data codewords -> interleaved data+EC codewords ----------------
+  function addEcc(data, ver) {
+    const nBlocks = ECC_BLK[ver], eccLen = ECC_CW[ver], raw = rawCodewords(ver);
+    const nShort = nBlocks - (raw % nBlocks);
+    const shortLen = Math.floor(raw / nBlocks);
+    const div = rsDivisor(eccLen);
+    const blocks = [];
+    for (let i = 0, k = 0; i < nBlocks; i++) {
+      const len = shortLen - eccLen + (i < nShort ? 0 : 1);
+      const dat = data.slice(k, k + len);
+      k += len;
+      const ecc = rsRemainder(dat, div);
+      const block = Array.from(dat);
+      if (i < nShort) block.push(0);            // pad so all blocks align
+      blocks.push(block.concat(Array.from(ecc)));
+    }
+    const out = [];
+    for (let i = 0; i < blocks[0].length; i++)
+      blocks.forEach((b, j) => {
+        if (i !== shortLen - eccLen || j >= nShort) out.push(b[i]);
+      });
+    return out;
+  }
+
+  const alignPositions = ver => {
+    if (ver === 1) return [];
+    const n = Math.floor(ver / 7) + 2;
+    const step = ver === 32 ? 26 : Math.ceil((ver * 4 + 4) / (n * 2 - 2)) * 2;
+    const res = [6];
+    for (let pos = ver * 4 + 10; res.length < n; pos -= step) res.splice(1, 0, pos);
+    return res;
+  };
+
+  function encode(text) {
+    const bytes = new TextEncoder().encode(text);
+
+    // Smallest version that fits.
+    let ver = 1;
+    for (; ver <= 40; ver++) {
+      const cap = dataCodewords(ver) * 8;
+      if (4 + (ver < 10 ? 8 : 16) + bytes.length * 8 <= cap) break;
+    }
+    if (ver > 40) throw new Error('Too much data for a QR code');
+
+    // Bit stream: mode + length + payload + terminator + padding.
+    const bits = [];
+    const push = (val, len) => { for (let i = len - 1; i >= 0; i--) bits.push((val >>> i) & 1); };
+    push(0b0100, 4);
+    push(bytes.length, ver < 10 ? 8 : 16);
+    for (const b of bytes) push(b, 8);
+    const capBits = dataCodewords(ver) * 8;
+    push(0, Math.min(4, capBits - bits.length));
+    push(0, (8 - (bits.length % 8)) % 8);
+    for (let pad = 0xec; bits.length < capBits; pad ^= 0xec ^ 0x11) push(pad, 8);
+
+    const dataCw = new Uint8Array(bits.length / 8);
+    bits.forEach((b, i) => { if (b) dataCw[i >>> 3] |= 0x80 >>> (i & 7); });
+    const codewords = addEcc(dataCw, ver);
+
+    // --- module grid ---------------------------------------------------
+    const size = ver * 4 + 17;
+    const mod = Array.from({ length: size }, () => new Array(size).fill(false));
+    const fn = Array.from({ length: size }, () => new Array(size).fill(false));
+    const set = (x, y, dark) => { mod[y][x] = dark; fn[y][x] = true; };
+
+    for (let i = 0; i < size; i++) { set(6, i, i % 2 === 0); set(i, 6, i % 2 === 0); }
+
+    for (const [fx, fy] of [[3, 3], [size - 4, 3], [3, size - 4]])
+      for (let dy = -4; dy <= 4; dy++)
+        for (let dx = -4; dx <= 4; dx++) {
+          const d = Math.max(Math.abs(dx), Math.abs(dy)), x = fx + dx, y = fy + dy;
+          if (x >= 0 && x < size && y >= 0 && y < size) set(x, y, d !== 2 && d !== 4);
+        }
+
+    const ap = alignPositions(ver);
+    for (let i = 0; i < ap.length; i++)
+      for (let j = 0; j < ap.length; j++) {
+        if ((i === 0 && j === 0) || (i === 0 && j === ap.length - 1) || (i === ap.length - 1 && j === 0)) continue;
+        for (let dy = -2; dy <= 2; dy++)
+          for (let dx = -2; dx <= 2; dx++)
+            set(ap[i] + dx, ap[j] + dy, Math.max(Math.abs(dx), Math.abs(dy)) !== 1);
+      }
+
+    function drawFormat(mask) {
+      const data = (0b00 << 3) | mask;            // 0b00 = ECC level M
+      let rem = data;
+      for (let i = 0; i < 10; i++) rem = (rem << 1) ^ ((rem >>> 9) * 0x537);
+      const b = ((data << 10) | rem) ^ 0x5412;
+      for (let i = 0; i <= 5; i++) set(8, i, bit(b, i));
+      set(8, 7, bit(b, 6)); set(8, 8, bit(b, 7)); set(7, 8, bit(b, 8));
+      for (let i = 9; i < 15; i++) set(14 - i, 8, bit(b, i));
+      for (let i = 0; i < 8; i++) set(size - 1 - i, 8, bit(b, i));
+      for (let i = 8; i < 15; i++) set(8, size - 15 + i, bit(b, i));
+      set(8, size - 8, true);                     // always-dark module
+    }
+    drawFormat(0);
+
+    if (ver >= 7) {
+      let rem = ver;
+      for (let i = 0; i < 12; i++) rem = (rem << 1) ^ ((rem >>> 11) * 0x1f25);
+      const b = (ver << 12) | rem;
+      for (let i = 0; i < 18; i++) {
+        const c = bit(b, i), a = size - 11 + (i % 3), q = Math.floor(i / 3);
+        set(a, q, c); set(q, a, c);
+      }
+    }
+
+    // Zig-zag codeword placement.
+    let i = 0;
+    for (let right = size - 1; right >= 1; right -= 2) {
+      if (right === 6) right = 5;
+      for (let vert = 0; vert < size; vert++)
+        for (let j = 0; j < 2; j++) {
+          const x = right - j;
+          const y = ((right + 1) & 2) === 0 ? size - 1 - vert : vert;
+          if (!fn[y][x] && i < codewords.length * 8) {
+            mod[y][x] = bit(codewords[i >>> 3], 7 - (i & 7));
+            i++;
+          }
+        }
+    }
+
+    const maskFn = [
+      (x, y) => (x + y) % 2 === 0,
+      (x, y) => y % 2 === 0,
+      (x, y) => x % 3 === 0,
+      (x, y) => (x + y) % 3 === 0,
+      (x, y) => (Math.floor(x / 3) + Math.floor(y / 2)) % 2 === 0,
+      (x, y) => ((x * y) % 2) + ((x * y) % 3) === 0,
+      (x, y) => (((x * y) % 2) + ((x * y) % 3)) % 2 === 0,
+      (x, y) => (((x + y) % 2) + ((x * y) % 3)) % 2 === 0,
+    ];
+    const applyMask = m => {
+      for (let y = 0; y < size; y++)
+        for (let x = 0; x < size; x++)
+          if (!fn[y][x] && maskFn[m](x, y)) mod[y][x] = !mod[y][x];
+    };
+
+    // --- mask selection (ISO 18004 penalty rules) ----------------------
+    const addRun = (len, hist) => {
+      if (hist[0] === 0) len += size;             // treat border as light
+      hist.pop(); hist.unshift(len);
+    };
+    const countPatterns = h => {
+      const n = h[1];
+      const core = n > 0 && h[2] === n && h[3] === n * 3 && h[4] === n && h[5] === n;
+      return (core && h[0] >= n * 4 && h[6] >= n ? 1 : 0) + (core && h[6] >= n * 4 && h[0] >= n ? 1 : 0);
+    };
+    const finishRun = (color, len, hist) => {
+      if (color) { addRun(len, hist); len = 0; }
+      addRun(len + size, hist);
+      return countPatterns(hist);
+    };
+    function penalty() {
+      let res = 0;
+      for (const vertical of [false, true]) {
+        for (let a = 0; a < size; a++) {
+          let color = false, run = 0;
+          const hist = [0, 0, 0, 0, 0, 0, 0];
+          for (let b = 0; b < size; b++) {
+            const cur = vertical ? mod[b][a] : mod[a][b];
+            if (cur === color) {
+              run++;
+              if (run === 5) res += 3; else if (run > 5) res++;
+            } else {
+              addRun(run, hist);
+              if (!color) res += countPatterns(hist) * 40;
+              color = cur; run = 1;
+            }
+          }
+          res += finishRun(color, run, hist) * 40;
+        }
+      }
+      for (let y = 0; y < size - 1; y++)
+        for (let x = 0; x < size - 1; x++) {
+          const c = mod[y][x];
+          if (c === mod[y][x + 1] && c === mod[y + 1][x] && c === mod[y + 1][x + 1]) res += 3;
+        }
+      let dark = 0;
+      for (const row of mod) for (const c of row) if (c) dark++;
+      const total = size * size;
+      res += (Math.ceil(Math.abs(dark * 20 - total * 10) / total) - 1) * 10;
+      return res;
+    }
+
+    let best = 0, bestScore = Infinity;
+    for (let m = 0; m < 8; m++) {
+      applyMask(m); drawFormat(m);
+      const s = penalty();
+      if (s < bestScore) { bestScore = s; best = m; }
+      applyMask(m);                                // undo (XOR is its own inverse)
+    }
+    applyMask(best); drawFormat(best);
+
+    return { size, version: ver, modules: mod };
+  }
+
+  return { encode };
+})();
+
+
+/* ------------------------------------------------------------------ *
+ * Geometry builder — emits flat-shaded, indexed meshes from boxes and
+ * extruded polygons. Everything is in millimetres.
+ * ------------------------------------------------------------------ */
+class Builder {
+  constructor() { this.pos = []; this.idx = []; }
+
+  _v(x, y, z) { this.pos.push(x, y, z); return this.pos.length / 3 - 1; }
+  _quad(p) {                                   // p = [[x,y,z] x4], CCW from outside
+    const a = this._v(...p[0]), b = this._v(...p[1]), c = this._v(...p[2]), d = this._v(...p[3]);
+    this.idx.push(a, b, c, a, c, d);
+  }
+
+  box(x0, y0, z0, x1, y1, z1) {
+    this._quad([[x0,y0,z1],[x1,y0,z1],[x1,y1,z1],[x0,y1,z1]]);  // +Z
+    this._quad([[x1,y0,z0],[x0,y0,z0],[x0,y1,z0],[x1,y1,z0]]);  // -Z
+    this._quad([[x1,y0,z1],[x1,y0,z0],[x1,y1,z0],[x1,y1,z1]]);  // +X
+    this._quad([[x0,y0,z0],[x0,y0,z1],[x0,y1,z1],[x0,y1,z0]]);  // -X
+    this._quad([[x0,y1,z1],[x1,y1,z1],[x1,y1,z0],[x0,y1,z0]]);  // +Y
+    this._quad([[x0,y0,z0],[x1,y0,z0],[x1,y0,z1],[x0,y0,z1]]);  // -Y
+  }
+
+  /* Extrude a simple polygon (array of [x,y]) between two Z planes.
+     `holes` are additional contours; all winding is normalised here. */
+  extrude(contour, z0, z1, holes = []) {
+    const ccw = pts => (THREE.ShapeUtils.area(pts.map(p => new THREE.Vector2(p[0], p[1]))) < 0 ? pts.slice().reverse() : pts);
+    const cw  = pts => (THREE.ShapeUtils.area(pts.map(p => new THREE.Vector2(p[0], p[1]))) > 0 ? pts.slice().reverse() : pts);
+    const outer = ccw(contour);
+    const inner = holes.map(cw);
+
+    const toV2 = pts => pts.map(p => new THREE.Vector2(p[0], p[1]));
+    const faces = THREE.ShapeUtils.triangulateShape(toV2(outer), inner.map(toV2));
+    const flat = outer.concat(...inner);
+
+    // caps: top follows the triangulation, bottom is reversed
+    const top = flat.map(p => this._v(p[0], p[1], z1));
+    const bot = flat.map(p => this._v(p[0], p[1], z0));
+    for (const f of faces) {
+      this.idx.push(top[f[0]], top[f[1]], top[f[2]]);
+      this.idx.push(bot[f[2]], bot[f[1]], bot[f[0]]);
+    }
+    // side walls, one quad per edge of every contour
+    for (const ring of [outer, ...inner])
+      for (let i = 0; i < ring.length; i++) {
+        const a = ring[i], b = ring[(i + 1) % ring.length];
+        this._quad([[a[0],a[1],z0],[b[0],b[1],z0],[b[0],b[1],z1],[a[0],a[1],z1]]);
+      }
+  }
+
+  ring(x0, y0, x1, y1, w, z0, z1) {            // rectangular frame with a rectangular hole
+    this.extrude([[x0,y0],[x1,y0],[x1,y1],[x0,y1]], z0, z1,
+                 [[[x0+w,y0+w],[x1-w,y0+w],[x1-w,y1-w],[x0+w,y1-w]]]);
+  }
+
+  arcBand(cx, cy, rIn, rOut, a0, a1, z0, z1, seg = 24) {
+    const pts = [];
+    for (let i = 0; i <= seg; i++) { const a = a0 + (a1 - a0) * i / seg; pts.push([cx + Math.cos(a)*rOut, cy + Math.sin(a)*rOut]); }
+    for (let i = seg; i >= 0; i--) { const a = a0 + (a1 - a0) * i / seg; pts.push([cx + Math.cos(a)*rIn,  cy + Math.sin(a)*rIn ]); }
+    this.extrude(pts, z0, z1);
+  }
+
+  disc(cx, cy, r, z0, z1, seg = 24) {
+    const pts = [];
+    for (let i = 0; i < seg; i++) { const a = i / seg * Math.PI * 2; pts.push([cx + Math.cos(a)*r, cy + Math.sin(a)*r]); }
+    this.extrude(pts, z0, z1);
+  }
+
+  /* L-shaped corner bracket. dx/dy point away from the corner. */
+  bracket(cx, cy, dx, dy, len, th, z0, z1) {
+    this.extrude([
+      [cx, cy], [cx + dx*len, cy], [cx + dx*len, cy + dy*th],
+      [cx + dx*th, cy + dy*th], [cx + dx*th, cy + dy*len], [cx, cy + dy*len],
+    ], z0, z1);
+  }
+
+  geometry() {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(this.pos, 3));
+    g.setIndex(this.idx);
+    g.computeVertexNormals();
+    return g;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Stand dimensions (mm)
+ * ------------------------------------------------------------------ */
+const D = {
+  panelW: 110, panelH: 135, frameW: 5,
+  backerT: 2.4,          // black back plate
+  whiteT: 1.8,           // white inlay sitting on the backer
+  frameT: 2.8,           // black border, measured from the backer face
+  reliefT: 1.4,          // QR / icon / text, measured from the white face
+  tilt: 16 * Math.PI / 180,
+  baseW: 120, baseD: 48, baseH: 9,
+  riserW: 112, riserFrontZ: 13, riserH: 2.5,
+  baseFrontZ: 16,
+  /* The base reaches back far enough to sit under the whole silhouette;
+     that puts the centre of mass ~21 mm in front of the rear edge, so the
+     stand needs ~31 deg of tilt to go over backwards instead of ~11. */
+  wedgeBackZ: -32, wedgeTopFrac: 0.42,
+  seatY: 9, seatZ: 6,    // where the panel meets the base
+};
+D.zBacker = [0, D.backerT];
+D.zWhite  = [D.backerT, D.backerT + D.whiteT];
+D.zFrame  = [D.backerT, D.backerT + D.frameT];
+D.zRelief = [D.zWhite[1], D.zWhite[1] + D.reliefT];
+D.panelT  = D.zRelief[1];
+D.riserTop = D.baseH + D.riserH;
+
+/* ------------------------------------------------------------------ *
+ * WiFi payload  (see the "WIFI:" URI convention used by iOS/Android)
+ * ------------------------------------------------------------------ */
+const esc = s => String(s).replace(/([\;,:"])/g, '\\$1');
+function wifiPayload({ ssid, pass, auth }) {
+  return auth === 'nopass'
+    ? `WIFI:T:nopass;S:${esc(ssid)};;`
+    : `WIFI:T:${auth};S:${esc(ssid)};P:${esc(pass)};;`;
+}
+
+/* ------------------------------------------------------------------ *
+ * Text — laid out glyph by glyph so we can control tracking, then
+ * uniformly scaled to fit the cap height / width budget.
+ * ------------------------------------------------------------------ */
+let CAP_H = null;                                // font cap height at NOM, measured once
+function buildText(font, text, capH, maxW, maxH, trackEm, depth) {
+  const NOM = 10, res = font.data.resolution, geos = [];
+  if (CAP_H === null) {
+    const probe = new TextGeometry('H', { font, size: NOM, depth: 1, curveSegments: 1, bevelEnabled: false });
+    probe.computeBoundingBox();
+    CAP_H = probe.boundingBox.max.y - probe.boundingBox.min.y;
+    probe.dispose();
+  }
+  let cursor = 0;
+  for (const ch of [...text]) {
+    const glyph = font.data.glyphs[ch];
+    if (!glyph) continue;
+    if (ch.trim() !== '' && glyph.o) {
+      const g = new TextGeometry(ch, { font, size: NOM, depth, curveSegments: 5, bevelEnabled: false });
+      g.translate(cursor, 0, 0);
+      geos.push(g);
+    }
+    cursor += (glyph.ha / res) * NOM + trackEm * NOM;
+  }
+  if (!geos.length) return [];
+
+  const bb = new THREE.Box3();
+  for (const g of geos) { g.computeBoundingBox(); bb.union(g.boundingBox); }
+  const w = bb.max.x - bb.min.x, h = bb.max.y - bb.min.y;
+  // Size off the font's cap height, not the inked bounds, so "Guest WiFi"
+  // and "GUEST WIFI" come out the same size; then clamp to the slot.
+  const s = Math.min(capH / CAP_H, maxW / w, maxH / h);
+
+  // scale about the origin, then centre on x; the baseline stays at y = 0
+  const m = new THREE.Matrix4()
+    .makeTranslation(-(bb.min.x + bb.max.x) / 2 * s, 0, 0)
+    .multiply(new THREE.Matrix4().makeScale(s, s, 1));
+  for (const g of geos) g.applyMatrix4(m);
+  return geos;
+}
+
+/* ------------------------------------------------------------------ *
+ * The stand itself
+ * ------------------------------------------------------------------ */
+function buildModel(opts, font, mats) {
+  const qr = QR.encode(wifiPayload(opts));
+  const root = new THREE.Group();
+  const meshes = [];
+  const add = (geo, part) => {
+    const m = new THREE.Mesh(geo, part === 'white' ? mats.white : mats.black);
+    m.castShadow = true; m.receiveShadow = true;
+    m.userData.part = part;
+    meshes.push(m);
+    return m;
+  };
+
+  // ---------- base + wedge (world space) ----------
+  const base = new Builder();
+  const hw = D.baseW / 2, hr = D.riserW / 2;
+  base.box(-hw, 0, D.baseFrontZ - D.baseD, hw, D.baseH, D.baseFrontZ);
+  base.box(-hr, D.baseH, D.wedgeBackZ, hr, D.riserTop, D.riserFrontZ);
+  root.add(add(base.geometry(), 'black'));
+
+  const cos = Math.cos(D.tilt), sin = Math.sin(D.tilt);
+  const backZ = t => -t * sin + D.seatZ;                 // panel's rear face, world Z
+  const backY = t => t * cos + D.seatY;                  // …and world Y
+  const tBottom = (D.riserTop - D.seatY) / cos;
+  const tTop = D.wedgeTopFrac * D.panelH;
+  const wedge = new Builder();
+  wedge.extrude([                                        // profile in (-Z, Y)
+    [-backZ(tBottom), D.riserTop],
+    [-D.wedgeBackZ,   D.riserTop],
+    [-backZ(tTop),    backY(tTop)],
+  ], -D.panelW / 2, D.panelW / 2);
+  const wedgeGeo = wedge.geometry();
+  wedgeGeo.applyMatrix4(new THREE.Matrix4().set(0,0,1,0,  0,1,0,0,  -1,0,0,0,  0,0,0,1));
+  root.add(add(wedgeGeo, 'black'));
+
+  // ---------- panel ----------
+  const panel = new THREE.Group();
+  panel.rotation.x = -D.tilt;
+  panel.position.set(0, D.seatY, D.seatZ);
+  root.add(panel);
+
+  const pw = D.panelW / 2;
+  const inX0 = -pw + D.frameW, inX1 = pw - D.frameW;
+  const inY0 = D.frameW,       inY1 = D.panelH - D.frameW;
+
+  const blk = new Builder(), wht = new Builder();
+  blk.box(-pw, 0, D.zBacker[0], pw, D.panelH, D.zBacker[1]);
+  blk.ring(-pw, 0, pw, D.panelH, D.frameW, D.zFrame[0], D.zFrame[1]);
+  wht.box(inX0, inY0, D.zWhite[0], inX1, inY1, D.zWhite[1]);
+
+  // corner brackets
+  const bl = 13, bt = 2.6, bi = 1.8;
+  for (const [cx, cy, dx, dy] of [
+    [inX0 + bi, inY1 - bi,  1, -1], [inX1 - bi, inY1 - bi, -1, -1],
+    [inX0 + bi, inY0 + bi,  1,  1], [inX1 - bi, inY0 + bi, -1,  1],
+  ]) blk.bracket(cx, cy, dx, dy, bl, bt, D.zRelief[0], D.zRelief[1]);
+
+  // QR — rows merged into runs so we emit boxes, not one cube per module
+  const QR_SIZE = 72, PAD_TOP = 5;
+  const qrTop = inY1 - PAD_TOP, qrX0 = -QR_SIZE / 2;
+  const mod = QR_SIZE / qr.size;
+  for (let y = 0; y < qr.size; y++) {
+    let x = 0;
+    while (x < qr.size) {
+      if (!qr.modules[y][x]) { x++; continue; }
+      let x2 = x;
+      while (x2 + 1 < qr.size && qr.modules[y][x2 + 1]) x2++;
+      blk.box(qrX0 + x * mod, qrTop - (y + 1) * mod, D.zRelief[0],
+              qrX0 + (x2 + 1) * mod, qrTop - y * mod, D.zRelief[1]);
+      x = x2 + 1;
+    }
+  }
+
+  // WiFi glyph: three arcs over a dot
+  const ICON_H = 13, iconTop = qrTop - QR_SIZE - 5, iconBottom = iconTop - ICON_H;
+  const cy = iconBottom + 1.5, a0 = 35 * Math.PI / 180, a1 = 145 * Math.PI / 180;
+  blk.disc(0, cy, 1.6, D.zRelief[0], D.zRelief[1]);
+  for (const [ri, ro] of [[3.2, 4.6], [6.4, 7.8], [9.6, 11.0]])
+    blk.arcBand(0, cy, ri, ro, a0, a1, D.zRelief[0], D.zRelief[1]);
+
+  panel.add(add(blk.geometry(), 'black'));
+  panel.add(add(wht.geometry(), 'white'));
+
+  // title + subtitle
+  const depth = D.zRelief[1] - D.zRelief[0];
+  const TITLE_CAP = 10.5, SUB_CAP = 4.8;
+  const titleBase = iconBottom - 4.5 - TITLE_CAP;      // cap top hangs below the icon
+  const subBase   = titleBase - SUB_CAP - 4.8;         // gap leaves room for descenders
+  const lines = [
+    [opts.title,    TITLE_CAP, 86, TITLE_CAP * 1.5, 0.02, titleBase],
+    [opts.subtitle, SUB_CAP,   80, SUB_CAP   * 1.5, 0.22, subBase],
+  ];
+  for (const [txt, cap, maxW, maxH, track, baseline] of lines)
+    for (const g of buildText(font, txt, cap, maxW, maxH, track, depth)) {
+      g.translate(0, baseline, D.zRelief[0]);
+      panel.add(add(g, 'black'));
+    }
+
+  root.updateMatrixWorld(true);
+  const bbox = new THREE.Box3().setFromObject(root);
+  return { root, meshes, qr, bbox, moduleMM: mod };
+}
+
+/* ------------------------------------------------------------------ *
+ * 3MF export — a 3MF file is just an OPC zip holding one XML model.
+ * Deflate comes from the platform's CompressionStream; if that is
+ * missing we fall back to stored (uncompressed) entries.
+ * ------------------------------------------------------------------ */
+const CRC = (() => {
+  const t = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) {
+    let c = i;
+    for (let k = 0; k < 8; k++) c = (c & 1) ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    t[i] = c >>> 0;
+  }
+  return t;
+})();
+const crc32 = b => {
+  let c = 0xffffffff;
+  for (let i = 0; i < b.length; i++) c = CRC[(c ^ b[i]) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+};
+
+async function deflateRaw(bytes) {
+  if (typeof CompressionStream !== 'function') return null;
+  try {
+    const s = new Blob([bytes]).stream().pipeThrough(new CompressionStream('deflate-raw'));
+    return new Uint8Array(await new Response(s).arrayBuffer());
+  } catch { return null; }
+}
+
+async function makeZip(entries) {
+  const enc = new TextEncoder(), body = [], dir = [];
+  let offset = 0;
+  for (const e of entries) {
+    const name = enc.encode(e.name);
+    const crc = crc32(e.data);
+    const packed = await deflateRaw(e.data);
+    const deflated = packed && packed.length < e.data.length;
+    const bytes = deflated ? packed : e.data;
+    const method = deflated ? 8 : 0;
+
+    const lh = new DataView(new ArrayBuffer(30));
+    lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0, true);
+    lh.setUint16(8, method, true); lh.setUint16(10, 0, true); lh.setUint16(12, 0x0021, true);
+    lh.setUint32(14, crc, true); lh.setUint32(18, bytes.length, true); lh.setUint32(22, e.data.length, true);
+    lh.setUint16(26, name.length, true); lh.setUint16(28, 0, true);
+    body.push(new Uint8Array(lh.buffer), name, bytes);
+
+    const cd = new DataView(new ArrayBuffer(46));
+    cd.setUint32(0, 0x02014b50, true); cd.setUint16(4, 20, true); cd.setUint16(6, 20, true);
+    cd.setUint16(8, 0, true); cd.setUint16(10, method, true);
+    cd.setUint16(12, 0, true); cd.setUint16(14, 0x0021, true);
+    cd.setUint32(16, crc, true); cd.setUint32(20, bytes.length, true); cd.setUint32(24, e.data.length, true);
+    cd.setUint16(28, name.length, true); cd.setUint16(30, 0, true); cd.setUint16(32, 0, true);
+    cd.setUint16(34, 0, true); cd.setUint16(36, 0, true); cd.setUint32(38, 0, true);
+    cd.setUint32(42, offset, true);
+    dir.push(new Uint8Array(cd.buffer), name);
+
+    offset += 30 + name.length + bytes.length;
+  }
+  const dirSize = dir.reduce((n, a) => n + a.length, 0);
+  const end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true);
+  end.setUint16(8, entries.length, true); end.setUint16(10, entries.length, true);
+  end.setUint32(12, dirSize, true); end.setUint32(16, offset, true);
+  return new Blob([...body, ...dir, new Uint8Array(end.buffer)], { type: 'model/3mf' });
+}
+
+/* Part colours. These drive both the preview and the colours written into
+   the 3MF, so the two never drift apart. */
+const BLACK_HEX = '#2A2D33', WHITE_HEX = '#F2F2EE';
+
+const num = v => {
+  const s = (Math.abs(v) < 5e-4 ? 0 : v).toFixed(3).replace(/\.?0+$/, '');
+  return s === '' || s === '-' ? '0' : s;
+};
+const xmlEsc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;' }[c]));
+
+/* Gather one material's triangles in 3MF space (Z up, sat on the bed),
+   welding coincident vertices as we go. */
+function collect(meshes, part, off) {
+  const seen = new Map(), verts = [], tris = [], v = new THREE.Vector3();
+  for (const m of meshes) {
+    if (m.userData.part !== part) continue;
+    const pos = m.geometry.attributes.position, index = m.geometry.index;
+    const remap = new Uint32Array(pos.count);
+    for (let i = 0; i < pos.count; i++) {
+      v.fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld);
+      const x = v.x + off.x, y = -v.z + off.y, z = v.y + off.z;   // three (y-up) -> 3MF (z-up)
+      const key = `${Math.round(x*1e3)}|${Math.round(y*1e3)}|${Math.round(z*1e3)}`;
+      let id = seen.get(key);
+      if (id === undefined) { id = verts.length / 3; seen.set(key, id); verts.push(x, y, z); }
+      remap[i] = id;
+    }
+    const n = index ? index.count : pos.count;
+    for (let i = 0; i < n; i += 3) {
+      const a = remap[index ? index.getX(i)     : i];
+      const b = remap[index ? index.getX(i + 1) : i + 1];
+      const c = remap[index ? index.getX(i + 2) : i + 2];
+      if (a !== b && b !== c && a !== c) tris.push(a, b, c);
+    }
+  }
+  return { verts, tris };
+}
+
+function meshXML({ verts, tris }, pindex) {
+  const out = ['<mesh><vertices>'];
+  for (let i = 0; i < verts.length; i += 3)
+    out.push(`<vertex x="${num(verts[i])}" y="${num(verts[i+1])}" z="${num(verts[i+2])}"/>`);
+  out.push('</vertices><triangles>');
+  for (let i = 0; i < tris.length; i += 3)
+    out.push(`<triangle v1="${tris[i]}" v2="${tris[i+1]}" v3="${tris[i+2]}" p1="${pindex}"/>`);
+  out.push('</triangles></mesh>');
+  return out.join('');
+}
+
+async function export3MF(model, title) {
+  const b = model.bbox;
+  const off = {                              // centre on the bed, sit on Z = 0
+    x: -(b.min.x + b.max.x) / 2,
+    y:  (b.min.z + b.max.z) / 2,
+    z: -b.min.y,
+  };
+  const black = collect(model.meshes, 'black', off);
+  const white = collect(model.meshes, 'white', off);
+
+  const model3mf =
+`<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:m="http://schemas.microsoft.com/3dmanufacturing/material/2015/02">
+<metadata name="Application">WiFi QR Stand</metadata>
+<metadata name="Title">${xmlEsc(title)}</metadata>
+<resources>
+<m:colorgroup id="1">
+<m:color color="${BLACK_HEX}"/>
+<m:color color="${WHITE_HEX}"/>
+</m:colorgroup>
+<object id="2" name="Black" type="model" pid="1" pindex="0">${meshXML(black, 0)}</object>
+<object id="3" name="White" type="model" pid="1" pindex="1">${meshXML(white, 1)}</object>
+<object id="4" name="${xmlEsc(title)}" type="model">
+<components><component objectid="2"/><component objectid="3"/></components>
+</object>
+</resources>
+<build><item objectid="4"/></build>
+</model>`;
+
+  /* Bambu Studio / OrcaSlicer read this to name the parts and put each one
+     on its own filament. Slicers that do not know it simply ignore it. */
+  const modelSettings =
+`<?xml version="1.0" encoding="UTF-8"?>
+<config>
+<object id="4">
+<metadata key="name" value="${xmlEsc(title)}"/>
+<part id="2" subtype="normal_part">
+<metadata key="name" value="Black"/>
+<metadata key="extruder" value="1"/>
+<metadata key="matrix" value="1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1"/>
+</part>
+<part id="3" subtype="normal_part">
+<metadata key="name" value="White"/>
+<metadata key="extruder" value="2"/>
+<metadata key="matrix" value="1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1"/>
+</part>
+</object>
+</config>`;
+
+  const enc = new TextEncoder();
+  return makeZip([
+    { name: '[Content_Types].xml', data: enc.encode(
+`<?xml version="1.0" encoding="UTF-8"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>
+<Default Extension="config" ContentType="text/xml"/>
+</Types>`) },
+    { name: '_rels/.rels', data: enc.encode(
+`<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rel0" Target="/3D/3dmodel.model" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>
+</Relationships>`) },
+    { name: '3D/3dmodel.model', data: enc.encode(model3mf) },
+    { name: 'Metadata/model_settings.config', data: enc.encode(modelSettings) },
+  ]);
+}
+
+/* ------------------------------------------------------------------ *
+ * Viewer
+ * ------------------------------------------------------------------ */
+const stage   = document.getElementById('stage');
+const overlay = document.getElementById('overlay');
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+stage.appendChild(renderer.domElement);
+
+const scene  = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(30, 1, 1, 3000);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.maxPolarAngle = Math.PI * 0.495;
+
+/* Pull the camera back far enough to hold the whole stand in frame. */
+function frameCamera(bbox) {
+  const c = bbox.getCenter(new THREE.Vector3());
+  const s = bbox.getSize(new THREE.Vector3());
+  const radius = Math.max(s.x, s.y, s.z * 1.4) * 0.5;
+  const dist = radius / Math.sin(camera.fov * Math.PI / 360) * 1.35;
+  controls.target.copy(c);
+  camera.position.copy(c).add(new THREE.Vector3(0.62, 0.34, 1).setLength(dist));
+  controls.minDistance = dist * 0.45;
+  controls.maxDistance = dist * 4;
+  controls.update();
+}
+
+const key = new THREE.DirectionalLight(0xffffff, 2.1);
+key.position.set(140, 260, 210);
+key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048);
+key.shadow.bias = -0.0009;
+Object.assign(key.shadow.camera, { left: -170, right: 170, top: 260, bottom: -40, near: 1, far: 800 });
+key.shadow.camera.updateProjectionMatrix();
+scene.add(key);
+
+const fill = new THREE.DirectionalLight(0x9fb6ff, 0.6);
+fill.position.set(-180, 90, 60);
+scene.add(fill);
+
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(2000, 2000), new THREE.ShadowMaterial({ opacity: 0.32 }));
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environmentIntensity = 0.5;
+
+const mats = {
+  black: new THREE.MeshStandardMaterial({ color: BLACK_HEX, roughness: 0.6,  metalness: 0 }),
+  white: new THREE.MeshStandardMaterial({ color: WHITE_HEX, roughness: 0.78, metalness: 0 }),
+};
+
+function resize() {
+  const w = stage.clientWidth, h = stage.clientHeight;
+  if (!w || !h) return;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(stage);
+resize();
+
+renderer.setAnimationLoop(() => { controls.update(); renderer.render(scene, camera); });
+
+/* ------------------------------------------------------------------ *
+ * Wiring
+ * ------------------------------------------------------------------ */
+const $ = id => document.getElementById(id);
+const fields = ['ssid', 'pass', 'auth', 'title', 'subtitle'].map($);
+const metaEl = $('meta'), dlBtn = $('download');
+
+const readOpts = () => ({
+  ssid: $('ssid').value || 'MyWiFi',
+  pass: $('pass').value,
+  auth: $('auth').value,
+  title: $('title').value.trim() || 'GUEST WIFI',
+  subtitle: $('subtitle').value.trim(),
+});
+
+let model = null, scalePct = 100;
+
+/* Scaling is a transform on the root group, so the exporter — which reads
+   matrixWorld — bakes it into the 3MF without any extra bookkeeping. */
+function applyScale() {
+  if (!model) return;
+  model.root.scale.setScalar(scalePct / 100);
+  model.root.updateMatrixWorld(true);
+  model.bbox.setFromObject(model.root);
+  updateMeta();
+}
+
+function updateMeta() {
+  const size = model.bbox.getSize(new THREE.Vector3());
+  const mod = model.moduleMM * scalePct / 100;
+  const tris = model.meshes.reduce((n, m) => n +
+    (m.geometry.index ? m.geometry.index.count : m.geometry.attributes.position.count) / 3, 0);
+  const warn = mod < 0.8
+    ? ' <span class="has-text-warning">&mdash; too fine to print cleanly</span>' : '';
+  metaEl.innerHTML =
+    `QR version <b>${model.qr.version}</b> &middot; <b>${model.qr.size}&times;${model.qr.size}</b> modules &middot; ` +
+    `<b>${mod.toFixed(2)} mm</b> per module${warn}<br>` +
+    `Stand <b>${size.x.toFixed(0)} &times; ${size.z.toFixed(0)} &times; ${size.y.toFixed(0)} mm</b> (w&times;d&times;h) &middot; ` +
+    `${(tris / 1000).toFixed(1)}k triangles`;
+}
+
+const font = await new FontLoader().loadAsync(
+  'https://cdn.jsdelivr.net/npm/three@0.183.0/examples/fonts/helvetiker_bold.typeface.json');
+
+function rebuild() {
+  const opts = readOpts();
+  let next;
+  try {
+    next = buildModel(opts, font, mats);
+  } catch (err) {
+    metaEl.innerHTML = `<span class="has-text-danger">${xmlEsc(err.message)}</span>`;
+    return;
+  }
+  if (model) {
+    scene.remove(model.root);
+    model.meshes.forEach(m => m.geometry.dispose());
+  }
+  const first = !model;
+  model = next;
+  scene.add(model.root);
+  applyScale();                       // keeps the current scale across rebuilds
+  if (first) frameCamera(model.bbox);
+}
+
+const scaleRange = $('scale'), scaleNum = $('scaleNum');
+function setScale(v, from) {
+  scalePct = Number.isFinite(v) ? Math.min(500, Math.max(10, Math.round(v * 10) / 10)) : 100;
+  if (from !== 'range') scaleRange.value = Math.min(300, Math.max(25, scalePct));
+  if (from !== 'num') scaleNum.value = scalePct;
+  applyScale();
+}
+scaleRange.addEventListener('input', () => setScale(+scaleRange.value, 'range'));
+scaleNum.addEventListener('input', () => {          // ignore half-typed values
+  const v = parseFloat(scaleNum.value);
+  if (Number.isFinite(v) && v >= 10 && v <= 500) setScale(v, 'num');
+});
+// no origin on blur, so an out-of-range entry is written back clamped
+scaleNum.addEventListener('change', () => setScale(parseFloat(scaleNum.value)));
+
+let timer;
+for (const f of fields)
+  f.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(rebuild, 160); });
+$('auth').addEventListener('change', () => {
+  $('pass').disabled = $('auth').value === 'nopass';
+  rebuild();
+});
+
+dlBtn.addEventListener('click', async () => {
+  if (!model) return;
+  dlBtn.classList.add('is-loading');
+  try {
+    const name = (readOpts().ssid.replace(/[^a-z0-9._-]+/gi, '-').replace(/^-|-$/g, '') || 'wifi').toLowerCase()
+      + (scalePct === 100 ? '' : `-${String(scalePct).replace('.', '_')}pct`);
+    const blob = await export3MF(model, `WiFi QR Stand — ${readOpts().ssid}`);
+    const url = URL.createObjectURL(blob);
+    const a = Object.assign(document.createElement('a'), { href: url, download: `wifi-stand-${name}.3mf` });
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  } finally {
+    dlBtn.classList.remove('is-loading');
+  }
+});
+
+rebuild();
+overlay.classList.add('is-hidden-fade');
+setTimeout(() => overlay.remove(), 500);
+
+// expose for automated checks
+window.__stand = { THREE, scene, camera, controls, renderer, frameCamera, rebuild, export3MF, get model() { return model; } };
+</script>
+</body>
+</html>
