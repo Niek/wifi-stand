@@ -1,41 +1,19 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>WiFi QR Stand</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css">
 <style>
-  html { background: #14161a; }
-  body { color: #e8eaed; }
-  .title, .label, .subtitle { color: #e8eaed !important; }
-  .input, .select select, .textarea {
-    background: #1e2128; border-color: #343a45; color: #e8eaed;
-  }
-  .input:focus, .select select:focus { border-color: #6c8cff; box-shadow: 0 0 0 .125em rgba(108,140,255,.25); }
-  .input::placeholder { color: #6b7280; }
-  .panel-card { background: #1a1d23; border: 1px solid #272b33; border-radius: 12px; }
-  #stage {
-    position: relative; width: 100%; height: 72vh; min-height: 420px;
-    border-radius: 12px; overflow: hidden; border: 1px solid #272b33;
-    background: radial-gradient(120% 90% at 50% 0%, #2b303a 0%, #15171c 70%);
-    cursor: grab;
-  }
+  /* Bulma's dark theme supplies the whole palette; these are the only
+     things it has no class for. */
+  html { background-color: var(--bulma-scheme-main-bis); }
+  #stage { height: 72vh; min-height: 420px; cursor: grab; }
   #stage:active { cursor: grabbing; }
   #stage canvas { display: block; }
-  #overlay {
-    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-    font-size: .9rem; color: #9aa3b2; background: rgba(20,22,26,.6); pointer-events: none;
-  }
-  #overlay.is-hidden-fade { opacity: 0; transition: opacity .4s; }
-  .meta { font-size: .78rem; color: #8b93a3; line-height: 1.6; }
-  .meta b { color: #c9d1de; font-weight: 600; }
-  .scale-row { display: flex; align-items: center; gap: .6rem; }
-  .scale-row input[type=range] { flex: 1; accent-color: #6c8cff; background: transparent; }
-  .scale-row input[type=number] { width: 4.8rem; text-align: right; }
-  .scale-row .pct { color: #8b93a3; font-size: .85rem; }
-  .legend { display: flex; gap: 1rem; font-size: .75rem; color: #8b93a3; }
-  .swatch { display: inline-block; width: .7rem; height: .7rem; border-radius: 3px; margin-right: .35rem; vertical-align: -1px; border: 1px solid #3a3f4a; }
+  #scale { accent-color: var(--bulma-link); }
+  #scaleNum { width: 5rem; }
 </style>
 </head>
 <body>
@@ -50,7 +28,7 @@
     <div class="columns is-variable is-5">
       <!-- ---------------- controls ---------------- -->
       <div class="column is-4">
-        <div class="panel-card p-5">
+        <div class="box">
           <div class="field">
             <label class="label is-small">Network name (SSID)</label>
             <div class="control">
@@ -99,41 +77,50 @@
 
           <div class="field">
             <label class="label is-small">Scale</label>
-            <div class="control scale-row">
-              <input id="scale" type="range" min="25" max="300" step="1" value="100">
-              <input id="scaleNum" class="input is-small" type="number" min="10" max="500" step="1" value="100">
-              <span class="pct">%</span>
+            <div class="control is-flex is-align-items-center">
+              <input id="scale" class="is-flex-grow-1 mr-3" type="range" min="25" max="300" step="1" value="100">
+              <input id="scaleNum" class="input is-small mr-2" type="number" min="10" max="500" step="1" value="100">
+              <span class="is-size-7 has-text-grey">%</span>
             </div>
           </div>
 
-          <hr style="background:#272b33;margin:1.25rem 0">
+          <hr>
 
           <button id="download" class="button is-primary is-fullwidth mb-3">
             <span>Download 3MF</span>
           </button>
 
-          <p id="meta" class="meta"></p>
+          <p id="meta" class="is-size-7 has-text-grey"></p>
 
-          <div class="legend mt-4">
-            <span><i class="swatch" style="background:#2a2d33"></i>black &mdash; filament 1</span>
-            <span><i class="swatch" style="background:#f2f2ee"></i>white &mdash; filament 2</span>
+          <div class="tags mt-4">
+            <span class="tag is-dark">filament 1 &mdash; black</span>
+            <span class="tag is-light">filament 2 &mdash; white</span>
           </div>
-          <p class="meta mt-2">Exports as two parts in one object. Prints upright, no supports.</p>
+          <p class="is-size-7 has-text-grey">Exports as two parts in one object. Prints upright, no supports.</p>
         </div>
       </div>
 
       <!-- ---------------- viewer ---------------- -->
       <div class="column is-8">
-        <div id="stage">
-          <div id="overlay">loading…</div>
+        <div id="stage" class="box p-0 is-clipped is-relative">
+          <div id="overlay" class="is-overlay is-flex is-align-items-center is-justify-content-center has-text-grey is-size-7">loading…</div>
         </div>
-        <p class="meta mt-3">
+        <p class="is-size-7 has-text-grey mt-3">
           Drag to orbit · scroll to zoom · right-drag to pan
         </p>
       </div>
     </div>
   </div>
 </section>
+
+<footer class="footer py-5">
+  <div class="content has-text-centered is-size-7">
+    <p>
+      <strong>WiFi QR Stand</strong> &mdash;
+      <a href="https://github.com/Niek/wifi-stand" target="_blank" rel="noopener">github.com/Niek/wifi-stand</a>
+    </p>
+  </div>
+</footer>
 
 <script type="importmap">
 {
@@ -963,10 +950,11 @@ function updateMeta() {
     (m.geometry.index ? m.geometry.index.count : m.geometry.attributes.position.count) / 3, 0);
   const warn = mod < 0.8
     ? ' <span class="has-text-warning">&mdash; too fine to print cleanly</span>' : '';
+  const hi = t => `<b class="has-text-light">${t}</b>`;
   metaEl.innerHTML =
-    `QR version <b>${model.qr.version}</b> &middot; <b>${model.qr.size}&times;${model.qr.size}</b> modules &middot; ` +
-    `<b>${mod.toFixed(2)} mm</b> per module${warn}<br>` +
-    `Stand <b>${size.x.toFixed(0)} &times; ${size.z.toFixed(0)} &times; ${size.y.toFixed(0)} mm</b> (w&times;d&times;h) &middot; ` +
+    `QR version ${hi(model.qr.version)} &middot; ${hi(`${model.qr.size}&times;${model.qr.size}`)} modules &middot; ` +
+    `${hi(`${mod.toFixed(2)} mm`)} per module${warn}<br>` +
+    `Stand ${hi(`${size.x.toFixed(0)} &times; ${size.z.toFixed(0)} &times; ${size.y.toFixed(0)} mm`)} (w&times;d&times;h) &middot; ` +
     `${(tris / 1000).toFixed(1)}k triangles`;
 }
 
@@ -1033,8 +1021,7 @@ dlBtn.addEventListener('click', async () => {
 });
 
 rebuild();
-overlay.classList.add('is-hidden-fade');
-setTimeout(() => overlay.remove(), 500);
+overlay.remove();
 
 // expose for automated checks
 window.__stand = { THREE, scene, camera, controls, renderer, frameCamera, rebuild, export3MF, get model() { return model; } };
